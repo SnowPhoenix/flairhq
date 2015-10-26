@@ -40,7 +40,39 @@ module.exports = {
     approved: "boolean",
     edited: "boolean",
     notes: "string",
-    privatenotes: "string"
+    privatenotes: "string",
+
+    isEvent: function () {
+      return this.type === "event";
+    },
+
+    isShiny: function () {
+      return this.type === "shiny";
+    },
+
+    isCasual: function () {
+      return this.type === "casual";
+    },
+
+    isEgg: function () {
+      return this.type === "egg";
+    },
+
+    isBank: function () {
+      return this.type === "bank";
+    },
+
+    isGiveaway: function () {
+      return this.type === "giveaway";
+    },
+
+    isEggCheck: function () {
+      return this.type === "eggcheck";
+    },
+
+    isMisc: function () {
+      return this.type === "misc";
+    }
   }
 };
 
