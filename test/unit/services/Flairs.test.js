@@ -47,6 +47,15 @@ describe("Flair text", function () {
     assert.fail(null, null, "Shouldn't reach this point.");
   });
 
+  it("Throws error in invalid TSVs", function () {
+    try {
+      Flairs.flairCheck(flairTexts.tradesFlairStd, flairTexts.svexFlairBadTSV);
+    } catch (e) {
+      return assert.strictEqual(e, "Error with TSVs");
+    }
+    assert.fail(null, null, "Shouldn't reach this point.");
+  });
+
   describe("On success", function () {
     it("Returns object containing friend codes", function () {
       var fcs = Flairs.flairCheck(flairTexts.tradesFlairStd, flairTexts.svexFlairStd).fcs;
@@ -109,7 +118,7 @@ describe("Flair template formatting", function () {
 describe("Friend Code Validity", function () {
   it("Correctly identifies valid friend codes", function () {
     assert(Flairs.validFC(fcs.valid1), 'Incorrectly claims that "' + fcs.valid1 + '" is invalid');
-    assert(Flairs.validFC(fcs.valid2), 'Incorrectly claims that "' + fcs.valid2 + '" is invalid');      
+    assert(Flairs.validFC(fcs.valid2), 'Incorrectly claims that "' + fcs.valid2 + '" is invalid');
   });
 
   it("Correctly identifies invalid friend codes", function () {

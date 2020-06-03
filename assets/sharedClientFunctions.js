@@ -150,23 +150,20 @@ module.exports = {
         flairService.getUserFlairs($scope.user, $scope.flairs)
       ) && !$scope.applied(applicationFlair, $scope.flairs);
     };
+    $scope.hasEventFlair = function () {
+      return flairService.hasEventFlair($scope.user);
+    };
     $scope.formattedRequirements = function (flair) {
       return flairService.formattedRequirements(flair, $scope.flairs);
     };
     $scope.clickRefLink = function (ref) {
-      if ($scope.user.isMod) {
+      if ($scope.user && $scope.user.isFlairMod) {
         io.socket.post('/flair/app/refreshClaim', ref, function (data, res) {
           if (res.statusCode !== 200) {
             console.log('Error ' + res.statusCode + ': Could not send link data to server.');
           }
         });
       }
-    };
-    // Temporary convenience button to move formerly-bank trades to the shiny section, since people will probably need to do that a lot.
-    $scope.moveRefToShinySection = function (ref) {
-      ref.type = 'shiny';
-      $scope.selectedRef = ref;
-      $scope.editRef();
     };
   }
 };

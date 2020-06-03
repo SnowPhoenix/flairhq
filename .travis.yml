@@ -10,7 +10,7 @@ env:
   global:
     - SKIP_SASS_BINARY_DOWNLOAD_FOR_CI=true
   matrix:
-    - export NODE_VERSION="4"
+    - export NODE_VERSION="6"
 
 matrix:
   fast_finish: true
@@ -38,11 +38,12 @@ before_install:
     fi
   - gcc --version
   - g++ --version
+  - npm i -g npm
 
 before_script:
   - npm install -g grunt-cli
   - npm install -g eslint
-  
+
 script:
   - npm install
   - grunt test

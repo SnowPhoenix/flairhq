@@ -53,38 +53,32 @@ module.exports = {
     if (req.params.number && isNaN(req.params.number)) {
       return res.badRequest({err: "Number must be a number"});
     }
-
-    Reference.findOne({url: {endsWith: endOfUrl}, user: req.user.name}, function (err, ref) {
-      if (err) {
-        return res.serverError(err);
-      }
-      if (ref && (ref.type !== "egg" || req.params.type !== "egg")) {
+     
+    if (req.params.number < 0) {
+      return res.badRequest({err: "Number must be 0 or more"});
+    }
+    
+    return Reference.findOne({url: {endsWith: endOfUrl}, user: req.user.name}).then(ref => {
+      if (ref && !(ref.type === 'egg' && req.params.type === 'egg')) {
         return res.status(400).json({err: 'Already added that URL.'});
       }
-      Reference.create(
-        {
-          url: req.params.url,
-          user: req.user.name,
-          user2: req.params.user2,
-          description: req.params.descrip,
-          type: req.params.type,
-          gave: req.params.gave,
-          got: req.params.got,
-          notes: req.params.notes,
-          privatenotes: req.params.privatenotes,
-          edited: false,
-          number: req.params.number || 0
-        },
-        function (err, ref) {
-          if (err) {
-            console.log(err);
-            return res.serverError();
-          } else {
-            return res.ok(ref);
-          }
-        }
-      );
-    });
+      
+
+
+      return Reference.create({
+        url: req.params.url,
+        user: req.user.name,
+        user2: req.params.user2,
+        description: req.params.descrip,
+        type: req.params.type,
+        gave: req.params.gave,
+        got: req.params.got,
+        notes: req.params.notes,
+        privatenotes: req.params.privatenotes,
+        edited: false,
+        number: req.params.number || 0
+      }).then(References.verifyIfNeeded).then(References.omitModOnlyProperties).then(res.ok);
+    }).catch(res.serverError);
   },
 
   edit: function (req, res) {
@@ -92,6 +86,11 @@ module.exports = {
     if (req.params.number && isNaN(req.params.number)) {
       return res.badRequest({err: "Number must be a number"});
     }
+
+    if (req.params.number < 0) {
+      return res.badRequest({err: "Number must be 0 or more"});
+    }
+
     Reference.findOne({id: req.params.id, user: req.user.name}).exec(function (err, ref) {
       if (err || !ref) {
         return res.notFound();
@@ -139,7 +138,7 @@ module.exports = {
       if (err) {
         return res.serverError(err);
       }
-      if (ref.user === req.user.name || req.user.isMod) {
+      if (ref.user === req.user.name || Users.hasModPermission(req.user, 'flair')) {
         if (ref.verified) {
           var query = {
             user: ref.user2,
@@ -149,7 +148,7 @@ module.exports = {
           //If a verified reference is deleted, its compelmentary reference is un-verified.
           Reference.update(query, {verified: false}, function (err) {
             if (err) {
-              console.log("Error while updating complementary trade.");
+              sails.log.error("Error while updating complementary trade.");
             }
           });
         }
@@ -184,7 +183,7 @@ module.exports = {
       if (!comment || err) {
         return res.notFound(err);
       }
-      if (req.user.name === comment.user2 || req.user.isMod) {
+      if (req.user.name === comment.user2 || Users.hasModPermission(req.user, 'flair')) {
         Comment.destroy(id, function (err, result) {
           return res.ok(result);
         });
@@ -218,7 +217,6 @@ module.exports = {
       Promise.all(promises).then(function (results) {
         return res.ok(results);
       }, function (error) {
-        console.log(error);
         return res.serverError(error);
       });
     });
@@ -254,4 +252,3 @@ module.exports = {
     }
   }
 };
-

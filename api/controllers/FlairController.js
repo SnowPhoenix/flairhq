@@ -97,35 +97,76 @@ module.exports = {
       var ipAddress = req.headers['x-forwarded-for'] || req.ip;
       // Get IP matches with banned users
       var events_with_ip = await Event.find({content: {contains: ipAddress}, user: {not: req.user.name}});
-      var matching_alt_usernames = _.uniq(_.map(events_with_ip, 'user'));
-      var matching_banned_users = await User.find({name: matching_alt_usernames, banned: true});
-      var banned_alts = _.map(matching_banned_users, 'name');
+
+      var matching_ip_usernames = _.uniq(_.map(events_with_ip, 'user'));
+      var matching_ip_users = await User.find({name: matching_ip_usernames});
+      var matching_ip_banned_users = matching_ip_users.filter(user => user.banned);
+
+      var ignoredAlts = ['0000-0000-0000', '1111-1111-1111'];
+      var users_with_matching_fcs = await User.find({loggedFriendCodes: flairs.fcs.filter((fc) => !ignoredAlts.includes(fc)), name: {not: req.user.name}});
+      var logged_fcs = _.flatten(_.map(users_with_matching_fcs, 'loggedFriendCodes'));
+      var matching_friend_codes = _.intersection(flairs.fcs, logged_fcs);
+      var matching_fc_usernames = _.map(users_with_matching_fcs, 'name');
 
       // Get friend codes that are similar (have a low edit distance) to banned friend codes
       var similar_banned_fcs = _.flatten(await* flairs.fcs.map(Flairs.getSimilarBannedFCs));
       // Get friend codes that are identical to banned users' friend codes
       var identical_banned_fcs = _.intersection(flairs.fcs, similar_banned_fcs);
-  
+
       var friend_codes = _.union(flairs.fcs, req.user.loggedFriendCodes);
 
-      var newPFlair = _.get(req, "user.flair.ptrades.flair_css_class") || "default";
-      var newsvFlair = _.get(req, "user.flair.svex.flair_css_class") || "";
-      newsvFlair = newsvFlair.replace(/2/, "");
+      var pFlair = _.get(req, "user.flair.ptrades.flair_css_class") || "default";
+      var svFlair = _.get(req, "user.flair.svex.flair_css_class") || "";
+      svFlair = svFlair.replace(/2/, "");
       var promises = [];
-      promises.push(Reddit.setUserFlair(refreshToken, req.user.name, newPFlair, flairs.ptrades, "PokemonTrades"));
-      promises.push(Reddit.setUserFlair(refreshToken, req.user.name, newsvFlair, flairs.svex, "SVExchange"));
+      var eventFlair = null; // Change to req.allParams().eventFlair during events
+
+      if (eventFlair) {
+        if (_.includes(Flairs.eventFlair, eventFlair) && !(pFlair.match(Flairs.eventFlairRegExp))) {
+          let team = await Team.find({"members": req.user.name});
+          if (team.length) {
+            return res.status(400).json({error: "You have already selected a starter!"});
+          }
+          req.user.team = _.includes(Flairs.kantoFlair, eventFlair) ? "kanto" : "alola";
+          pFlair = Flairs.makeNewCSSClass(pFlair, `kva-${eventFlair}-1`, "PokemonTrades");
+          module.exports.addMembershipPoints(req, res, "add").then(() => {
+            promises.push(Reddit.setUserFlair(refreshToken, req.user.name, pFlair, flairs.ptrades, "PokemonTrades").catch((err) => {
+              sails.log.warn(`Reverting team ${req.user.team} join for ${req.user.name} due to the following error:`);
+              sails.log.warn(err);
+              module.exports.addMembershipPoints(req, res, "remove");
+              throw err;
+            }));
+          });
+        } else {
+          return res.status(400).json({error: "Unexpected extra flair."});
+        }
+      } else {
+        promises.push(Reddit.setUserFlair(refreshToken, req.user.name, pFlair, flairs.ptrades, "PokemonTrades"));
+      }
+      promises.push(Reddit.setUserFlair(refreshToken, req.user.name, svFlair, flairs.svex, "SVExchange"));
       promises.push(User.update({name: req.user.name}, {loggedFriendCodes: friend_codes}));
 
-      if (!blockReport && (identical_banned_fcs.length || banned_alts.length || flagged.length)) {
+      if (!blockReport && (users_with_matching_fcs.length !== 0 || matching_ip_usernames.length !== 0 || flagged.length)) {
         var message = 'The user /u/' + req.user.name + ' set the following flairs:\n\n' + flairs.ptrades + '\n\n' + flairs.svex + '\n\n';
-        if (identical_banned_fcs.length) {
-          message += '**This flair contains a banned friend code: ' + identical_banned_fcs + '**\n\n';
-        } else if (flagged.length && similar_banned_fcs.length) {
-          message += '**This flair contains a friend code similar to the following banned friend code'  + (similar_banned_fcs.length > 1 ? 's: ' : ': ') +
-            similar_banned_fcs.join(', ') + '**\n\n';
+        if (users_with_matching_fcs.length !== 0) {
+          message += 'This flair contains a friend code that matches ' + '/u/' + matching_fc_usernames.join(', /u/') + '\'s friend code: ' + matching_friend_codes + '\n\n';
+          var altNote = "Alt of " + matching_fc_usernames;
+          promises.push(Usernotes.addUsernote(refreshToken, 'FlairHQ', 'pokemontrades', req.user.name, altNote, 'spamwarn', ''));
+          var otherAltNote = "Alt of " + req.user.name;
+          promises.push(Usernotes.addUsernote(refreshToken, 'FlairHQ', 'pokemontrades', matching_fc_usernames, otherAltNote, 'spamwarn', ''));
+          if (identical_banned_fcs.length) {
+            message += '**This flair contains a banned friend code: ' + identical_banned_fcs + '**\n\n';
+          } else if (flagged.length && similar_banned_fcs.length) {
+            message += '**This flair contains a friend code similar to the following banned friend code' + (  similar_banned_fcs.length > 1 ? 's: ' : ': ') + similar_banned_fcs.join(', ') + '**\n\n';
+          }
         }
-        if (banned_alts.length) {
-          message += '**This user may be an alt of the banned user' + (banned_alts.length === 1 ? '' : 's') + ' /u/' + banned_alts.join(', /u/') + '.**\n\n';
+        if (matching_ip_usernames.length !== 0) {
+          message += 'This user may be an alt of the user' + (matching_ip_usernames.length === 1 ? '' : 's') + ' /u/' + matching_ip_usernames.join(', /u/') + '.\n\n';
+          promises.push(Usernotes.addUsernote(refreshToken, 'FlairHQ', 'pokemontrades', req.user.name, altNote, 'spamwarn', ''));
+          promises.push(Usernotes.addUsernote(refreshToken, 'FlairHQ', 'pokemontrades', matching_fc_usernames, otherAltNote, 'spamwarn', ''));
+          if (matching_ip_banned_users.length) {
+            message += '**' + '/u/' + matching_ip_banned_users.map(user => user.name).join(', /u/') + ' is banned.**\n\n';
+          }
         }
         if (flagged.length) {
           message += 'The friend code' + (flagged.length === 1 ? ' ' + flagged + ' is' : 's ' + flagged.join(', ') + ' are') + ' invalid.\n\n';
@@ -145,6 +186,16 @@ module.exports = {
           user: req.user.name,
           content: "Changed SVExchange flair text to: " + req.allParams().svex + ". IP: " + ipAddress
         }]).exec(function () {});
+        User.native(function(err, collection) {
+          collection.update({"_id": req.user.name}, {
+            $set:{
+              "flair.ptrades.flair_text": flairs.ptrades,
+              "flair.ptrades.flair_css_class": pFlair,
+              "flair.svex.flair_text": flairs.svex,
+              "flair.svex.flair_css_class": svFlair
+            }
+          });
+        });
         return res.ok();
       });
     } catch (err) {
@@ -167,6 +218,48 @@ module.exports = {
     } catch (err) {
       return res.serverError(err);
     }
+  },
+
+  addMembershipPoints: async function (req, res, action) {
+
+    try {
+      var promises = [];
+
+      promises.push(PointLog.create({
+        time: new Date(),
+        team: req.user.team,
+        from: req.user.name,
+        pointType: "membershipPoints",
+        reason: action === "add" ? "Joined team" : "Reverted join",
+        points: action === "add" ? 1 : -1
+      }));
+
+      promises.push(Team.native(function(err, collection) {
+        collection.update(
+          {"_id": req.user.team},
+          action === "add" ? {$push: {"members": req.user.name}, $inc: {"membershipPoints": 1}} : {$pull: {"members": req.user.name}, $inc: {"membershipPoints": -1}}
+        );
+      }));
+
+      if (action === "remove") {
+        promises.push(ContestStats.native(function(err, collection) {
+          collection.deleteOne({
+            _id: req.user.name
+          });
+        }));
+      } else {
+        promises.push(ContestStats.create({
+          user: req.user.name,
+          expPoints: 1,
+          battleWins: 0
+        }));
+      }
+
+      await* promises;
+
+    } catch (err) {
+      return res.serverError(err);
+    }
+
   }
 };
-

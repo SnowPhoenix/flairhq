@@ -25,19 +25,26 @@
         <div class="row" ng-if="user">
           <form class="form-horizontal">
             <div class="form-group col-md-12" ng-repeat="fc in user.flairFriendCodes track by $index">
-              <label for="friendcode1" class="col-md-3 control-label">Friend Code:*</label>
+              <label for="friendcode1" class="col-md-3 control-label">Friend Code*:</label>
 
-              <div class="col-md-9">
-                <div class="input-group"
-                     ng-class="{'has-error': !user.flairFriendCodes[$index]}">
-                  <input type="text" class="form-control" mask="9999-9999-9999"
-                         mask-restrict="reject" ng-model="user.flairFriendCodes[$index]"
-                         placeholder="9999-9999-9999" ng-pattern="regex.fcSingle">
-                  <span class="input-group-btn">
-                    <button class="btn btn-default" ng-click="delflairFc($index)"  ng-disabled="$index === 0">
-                      <span class="glyphicon glyphicon-trash"></span>
-                    </button>
-                  </span>
+              <div ng-class="{'has-error': !user.flairFriendCodes[$index]}">
+                <div class="col-md-5">
+                  <input type="text" class="form-control"
+                         ng-model="user.flairFriendCodes[$index]"
+                         placeholder="9999-9999-9999">
+                </div>
+                <label class="col-md-1 control-label optional">Console:</label>
+                <div class="col-md-3" ng-class="{'has-error': !user.console[$index]}">
+                  <div class="input-group">
+                    <select class="form-control" ng-model="user.console[$index]" ng-options="consoleName for consoleName in possibleConsoles">
+                      <option value=""></option>
+                    </select>
+                    <span class="input-group-btn">
+                      <button class="btn btn-default" ng-click="delflairFc($index)"  ng-disabled="$index === 0">
+                        <span class="glyphicon glyphicon-trash"></span>
+                      </button>
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -50,12 +57,12 @@
             </div>
 
             <div class="form-group col-sm-12" ng-repeat="game in user.flairGames | orderBy:'createdAt' track by $index">
-              <label class="col-md-3 control-label" title="In-Game Name (i.e. the name of your character)">IGN:*</label>
+              <label class="col-md-3 control-label" title="In-Game Name (i.e. the name of your character)">In-Game Name*:</label>
 
               <div class="col-md-2">
                 <input type="text" class="form-control" ng-model="game.ign">
               </div>
-              <label class="col-md-1 control-label">TSV:</label>
+              <label class="col-md-1 control-label optional">TSV:</label>
 
               <div class="col-md-3 has-feedback">
                 <ng-tooltip unlabeled="true" class="col-md-12" title="Only for SVExchange. Leave blank if you don't know.">
@@ -64,7 +71,7 @@
                          placeholder="XXXX">
                 </ng-tooltip>
               </div>
-              <label class="col-sm-1 control-label">Game:</label>
+              <label class="col-sm-1 control-label optional">Game:</label>
 
               <div class="col-md-2">
                 <div class="input-group">
@@ -87,7 +94,6 @@
                 </button>
               </div>
             </div>
-
             <div class="row">
               <div class="col-md-12">
                 <div class="alert">

@@ -6,8 +6,11 @@
  * @docs        :: http://sailsjs.org/#!documentation/controllers
  */
 
-var passport = require('passport'),
-  crypto = require('crypto');
+'use strict';
+
+const passport = require('passport');
+const crypto = require('crypto');
+const _ = require('lodash');
 
 module.exports = {
 
@@ -21,7 +24,7 @@ module.exports = {
   },
 
   reddit: function (req, res) {
-    /* Pass the redirect info as JSON with the OAuth state. This behavior is more intuitive than storing it in the session, because otherwise the user 
+    /* Pass the redirect info as JSON with the OAuth state. This behavior is more intuitive than storing it in the session, because otherwise the user
      * might fail to complete the login and then be confused when they get redirected somewhere unexpected the next time they visit the site. */
     var login_info = {type: req.query.loginType, redirect: req.query.redirect || '/', validation: crypto.randomBytes(32).toString('hex')};
     req.session.validation = login_info.validation;
@@ -41,17 +44,18 @@ module.exports = {
           if (err === 'banned') {
             return res.view(403, {error: 'You have been banned from FlairHQ'});
           }
+          sails.log.error(err);
           return res.view(403, {error: 'Sorry, something went wrong. Try logging in again.'});
         }
         var login_info;
         try {
           login_info = JSON.parse(req.query.state);
         } catch (err) {
-          console.log('Error with parsing /u/' + user.name + '\'s session state');
-          return res.serverError(err);
+          sails.log.warn('/u/' + user.name + '\'s session state was in an invalid format.');
+          return res.badRequest(err);
         }
         if (login_info.validation !== req.session.validation) {
-          console.log("Failed login for /u/" + user.name + ": invalid session state");
+          sails.log.warn("Failed login for /u/" + user.name + ": invalid session state");
           return res.view(403, {error: 'You have an invalid session state. (Try logging in again.)'});
         }
         let finishLogin = function () {
@@ -69,18 +73,18 @@ module.exports = {
             return res.redirect(url);
           });
         };
-        let modStatus = await Reddit.checkModeratorStatus(sails.config.reddit.adminRefreshToken, user.name, 'pokemontrades');
-        if (modStatus) { //User is a mod, set isMod to true
-          User.update(user.name, {isMod: true}).exec(function () {
+        let modPermissions = await Reddit.getModeratorPermissions(sails.config.reddit.adminRefreshToken, user.name, 'pokemontrades');
+        if (modPermissions) { //User is a mod, set isMod to true
+          User.update(user.name, {isMod: true, modPermissions}).exec(function () {
             /* Redirect to the mod authentication page, or to the desired url if this was mod authentication.*/
-            if (login_info.type !== 'mod') {
+            if (login_info.type !== 'mod' && ['all', 'access', 'mail', 'flair', 'wiki'].some(permission => _.includes(modPermissions, permission))) {
               return res.redirect('/auth/reddit?loginType=mod' + (login_info.redirect ? '&redirect=' + encodeURIComponent(login_info.redirect) : ''));
             }
             return finishLogin();
           });
         }
-        else if (user.isMod) { // User is not a mod, but had isMod set for some reason (e.g. maybe the user used to be a mod). Set isMod to false.
-          User.update(user.name, {isMod: false}).exec(finishLogin);
+        else if (user.isMod || user.modPermissions) { // User is not a mod, but had isMod set for some reason (e.g. maybe the user used to be a mod). Set isMod to false.
+          User.update(user.name, {isMod: false, modPermissions: null}).exec(finishLogin);
         } else { // Regular user
           return finishLogin();
         }
@@ -88,5 +92,36 @@ module.exports = {
         return res.serverError(err);
       }
     })(req, res);
+  },
+  
+  discordCallback: async function (req, res) {
+    const code = req.allParams().code;
+    const user = req.user;
+    const ptradesFlair = user.flair.ptrades.flair_text;
+    const svexFlair = user.flair.svex.flair_text;
+    if (!code) {
+      return res.view(403, {error: 'Sorry, something went wrong. Please try again.'});
+    }
+    if (_.isNull(ptradesFlair) && _.isNull(svexFlair)) {
+      return res.view(403, {error: 'Please set your flair.'});
+    }
+    try {
+      const response = await Discord.getAccessToken(code);
+      const accessToken = response.access_token;
+      const currentUser = await Discord.getCurrentUser(accessToken);
+      const nick = req.user.name;
+      const joinedUser = await Discord.addUserToGuild(accessToken, currentUser.id, nick);
+      const serverUrl = 'https://discordapp.com/channels/' + sails.config.discord.server_id;
+      if (!joinedUser) {
+        return res.redirect(serverUrl);
+      }
+      await Event.create({type: "discordJoin", user: nick,content: "Joined Discord as @" + currentUser.username + "#" + currentUser.discriminator + " (ID: " + currentUser.id + ")"});
+      return res.redirect(serverUrl);
+    } catch (err) {
+      if (err.statusCode === 429){
+        return res.view(403, {error: 'Discord servers refused to cooperate due to high number of requests. Please try again later'});
+      }
+      return res.serverError(err);
+    }
   }
 };

@@ -28,7 +28,7 @@
 // etc.
 
 table a:visited:not(.icon):not(.btn) {
-  color: #eb0032;
+  color: #5e35b1;
 }
 
 .navbar a, .navbar a:visited {
@@ -88,7 +88,7 @@ img {
 }
 
 input[type="checkbox"]:not(.search-check) {
-  -moz-appearance: none;
+  -moz-appearance: checkbox;
   margin: 0px;
   width: 20px;
   height: 20px;
@@ -205,4 +205,35 @@ td h3 {
 
 .plus-minus{
   font-family: Courier;
+}
+
+@media (max-width: 991px) {
+  .col-sm-1, .col-sm-2, .col-sm-3, .col-sm-4, .col-sm-5, .col-sm-6,
+  .col-sm-7, .col-sm-8, .col-sm-9, .col-sm-10, .col-sm-11, .col-sm-12 {
+    float: none;
+  }
+}
+
+.optional {
+  font-weight: normal;
+}
+
+.ban-message {
+  min-height: 12em;
+}
+
+.ban-md *:first-of-type {
+  margin-top: 20px;
+}
+
+.ban-md hr {
+  border-color: #ccc;
+}
+
+.flair-number {
+  width: 50px;
+}
+
+table > thead > tr.no-space > th {
+    padding: 0;
 }

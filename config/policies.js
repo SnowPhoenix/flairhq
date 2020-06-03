@@ -16,46 +16,56 @@
  * http://sailsjs.org/#/documentation/reference/sails.config/sails.config.policies.html
  */
 
-var mod = ['passport', 'sessionAuth', 'isMod'];
-var user = ['passport', 'sessionAuth'];
-var anyone = ['passport'];
+const anyone = ['passport'];
+const user = ['passport', 'sessionAuth'];
+const flairMod = ['passport', 'sessionAuth', 'isFlairMod'];
+const postMod = ['passport', 'sessionAuth', 'isPostMod'];
+const admin = ['passport', 'sessionAuth', 'isAdmin'];
 
 module.exports.policies = {
 
-  '*': mod,
+  '*': admin,
 
   AuthController: {
     '*': anyone
   },
 
   FlairController: {
-    '*': mod,
+    '*': admin,
+    applist: flairMod,
     apply: user,
-    setText: user
+    setText: user,
+    denyApp: flairMod,
+    approveApp: flairMod
   },
 
   HomeController: {
-    '*': mod,
+    '*': admin,
     index: user,
     reference: anyone,
     search: user,
     info: anyone,
-    tools: anyone
+    tools: anyone,
+    applist: flairMod,
+    discord: user
   },
 
   ReferenceController: {
-    '*': mod,
+    '*': admin,
     get: user,
     add: user,
     edit: user,
     deleteRef: user,
     comment: user,
     delComment: user,
+    approve: flairMod,
+    approveAll: flairMod,
+    saveFlairs: flairMod,
     getFlairs: user
   },
 
   SearchController: {
-    '*': mod,
+    '*': admin,
     ref: user,
     refView: user,
     user: user,
@@ -63,9 +73,14 @@ module.exports.policies = {
   },
 
   UserController: {
-    '*': mod,
+    '*': admin,
     edit: user,
     mine: user,
     get: anyone
+  },
+  
+  ModNoteController: {
+    '*': admin,
+    find: postMod
   }
 };

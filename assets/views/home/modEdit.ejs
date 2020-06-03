@@ -17,7 +17,7 @@
                 <a ng-href="/u/{{note.user}}">{{note.user}}</a>
                 <span class="pull-right">
                   {{note.createdAt | date: "medium"}}
-                  <a href="#" ng-click="delNote(note.id)">
+                  <a ng-controller="referenceCtrl" ng-if="user.isMod && user.modPermissions && user.modPermissions.includes('all')" href="#" ng-click="delNote(note.id)">
                     <span class="glyphicon glyphicon-trash"></span>
                   </a>
                 </span>
@@ -27,27 +27,28 @@
               </div>
             </div>
           </div>
-          <div class="form-group">
-            <textarea class="form-control" ng-model="newStuff.newNote"
+          <div class="form-group" ng-if="user.isMod && user.modPermissions && user.modPermissions.includes('all')">
+            <textarea class="form-control" ng-model="newStuff.newNote" ng-trim="false"
                       placeholder="Add Note with markdown"></textarea>
             <div class="panel panel-default">
               <div class="panel-heading">Preview</div>
               <div class="panel-body" ><md ng-model="newStuff.newNote"></md></div>
             </div>
             <button type="button" class="btn btn-primary"
-                    ng-disabled="!newStuff.newNote" ng-click="addNote()">Add note</button>
+                    ng-disabled="!newStuff.newNote.trim()" ng-click="addNote()">Add note</button>
           </div>
         </div>
       </div>
     </div>
 
 
-    <div class="col-md-6">
+    <div class="col-md-6" ng-if="user.isMod && user.modPermissions && user.modPermissions.includes('all')">
       <div class="form-group">
         <label class="col-sm-3 control-label">Introduction:</label>
 
         <div class="col-md-8">
-          <textarea class="form-control" ng-model="refUser.intro"></textarea>
+          <textarea class="form-control" ng-model="refUser.intro" ng-maxlength="10000" maxlength="10000"></textarea>
+          <span style="float:right">{{refUser.intro.length || 0}}/10000</span>
         </div>
       </div>
 
@@ -74,7 +75,7 @@
         </div>
       </div>
       <div class="form-group">
-        <div class="col-md-9 col-md-offset-3">
+        <div class="col-md-12 col-md-offset-3">
           <button type="button" class="btn btn-primary has-spinner" ng-click="modSaveProfile()"
                   ng-class="[ok.modSaveProfile ? 'glyphicon glyphicon-ok' : '',
                 spin.modSaveProfile ? 'active' : '']">
@@ -85,6 +86,12 @@
                   ng-if="!refUser.banned">Ban User</button>
           <button type="button" class="btn btn-danger" ng-click="setLocalBan(refUser.name, false)"
                   ng-if="refUser.banned">Unban User</button>
+          <button type="button" class="btn btn-danger has-spinner" ng-click="modClearSessions(refUser.name)"
+                  ng-class="[ok.modClearSessions ? 'glyphicon glyphicon-ok' : '',
+                  spin.modClearSessions ? 'active' : '']">
+            <span class="spinner"><i class="icon-spin icon-refresh"></i></span>
+            {{ok.modClearSessions ? "" : "Clear Sessions"}}
+          </button>
         </div>
       </div>
     </div>

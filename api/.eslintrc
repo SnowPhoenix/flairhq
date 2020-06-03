@@ -13,12 +13,17 @@
     "Flair": true,
     "Flairs": true,
     "Usernotes": true,
+    "PointLog": true,
     "References": true,
     "Sessions": true,
     "Game": true,
     "Application": true,
     "ModNote": true,
     "Modmail": true,
-    "Modmails": true
+    "Modmails": true,
+    "Team": true,
+    "ContestStats": true,
+    "Discord": true,
+    "_": true
   }
 }

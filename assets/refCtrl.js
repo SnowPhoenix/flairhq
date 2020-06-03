@@ -33,7 +33,7 @@ module.exports = function ($scope, io) {
     var comment = $scope.newStuff.newComment,
       url = "/reference/comment/add";
 
-    if (!comment || comment === "") {
+    if (!comment.trim()) {
       return;
     }
 
@@ -111,11 +111,32 @@ module.exports = function ($scope, io) {
 
   };
 
+  $scope.modClearSessions = function (username) {
+    var url = `/clearsession/${username}`;
+
+    $scope.ok.modClearSessions = false;
+    $scope.spin.modClearSessions = true;
+
+    io.socket.post(url, {}, function (data, res) {
+      $scope.spin.modClearSessions = false;
+      if (res.statusCode === 200) {
+        $scope.ok.modClearSessions = true;
+        setTimeout(function () {
+          $scope.ok.modClearSessions = false;
+          $scope.$apply();
+        }, 1500);
+      } else {
+        $scope.modSaveError = "There was some issue clearing sessions.";
+      }
+      $scope.$apply();
+    });
+  };
+
   $scope.addNote = function () {
     var newNote = $scope.newStuff.newNote,
       url = "/user/addNote";
 
-    if (newNote) {
+    if (newNote.trim()) {
       io.socket.post(url, {
         "username": $scope.refUser.name,
         "note": newNote

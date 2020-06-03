@@ -14,12 +14,17 @@ module.exports = {
     User.findOne(req.params.username, function (err, user) {
       if (!user) {
         return res.notFound("Can't find user");
-      } else if (user.name !== req.user.name && !req.user.isMod) {
+      } else if (user.name !== req.user.name && !Users.hasModPermission(req.user, 'all')) {
         return res.forbidden("You can't edit another user's information unless you are a mod.");
       } else {
         var updatedUser = {};
         if (req.params.intro !== undefined) {
-          updatedUser.intro = req.params.intro;
+          if (req.params.intro.length > 10000) {
+            res.err("Introduction can't be longer than 10 000 characters");
+          }
+          else {
+            updatedUser.intro = req.params.intro;
+          }
         }
         if (req.params.fcs !== undefined) {
           updatedUser.friendCodes = req.params.fcs;
@@ -53,7 +58,7 @@ module.exports = {
                 {id: game.id},
                 {tsv: parseInt(game.tsv), ign: game.ign}).exec(function (err, game) {
                   if (err) {
-                    console.log(err);
+                    sails.log.error(err);
                     res.serverError(err);
                   } else {
                     games.push(game);
@@ -63,7 +68,7 @@ module.exports = {
             } else if (!game.id && (game.tsv || game.ign)) {
               promises.push(Game.create({user: user.name, tsv: parseInt(game.tsv), ign: game.ign}).exec(function (err, game) {
                 if (err) {
-                  console.log(err);
+                  sails.log.error(err);
                   res.serverError(err);
                 } else {
                   games.push(game);
@@ -159,6 +164,10 @@ module.exports = {
         return res.status(400).json({error: "Invalid banlist entry"});
       }
 
+      if (typeof req.params.tradeNote !== 'string') {
+        return res.status(400).json({error: "Invalid trade note"});
+      }
+
       if (req.params.duration && (typeof req.params.duration !== 'number' || req.params.duration < 0 || req.params.duration > 999 || req.params.duration % 1 !== 0)) {
         return res.status(400).json({error: "Invalid duration"});
       }
@@ -175,21 +184,13 @@ module.exports = {
           return res.status(400).json({error: "Invalid friendcode list"});
         }
       }
-      console.log("/u/" + req.user.name + ": Started process to ban /u/" + req.params.username);
-      var user;
-      try {
-        user = await User.findOne(req.params.username);
-        if (user) {
-          req.params.username = user.name;
-        } else {
-          if (await Reddit.checkUsernameAvailable(req.params.username)) {
-            console.log("Ban aborted (user does not exist)");
-            return res.status(404).json({error: "That user does not exist."});
-          }
+      sails.log("/u/" + req.user.name + ": Started process to ban /u/" + req.params.username);
+      var user = await User.findOne(req.params.username);
+      if (!user) {
+        if (await Reddit.checkUsernameAvailable(req.params.username)) {
+          sails.log.warn("Ban aborted (user does not exist)");
+          return res.status(404).json({error: "That user does not exist."});
         }
-      } catch (err) {
-        console.log(err);
-        return res.serverError(err);
       }
       var flairs;
       try {
@@ -205,7 +206,13 @@ module.exports = {
       var unique_fcs = _.union(logged_fcs, req.params.additionalFCs);
       if (flairs) {
         var fc_match = /(\d{4}-){2}\d{4}/g;
-        unique_fcs = _.union(flairs[0].flair_text.match(fc_match), flairs[1].flair_text.match(fc_match), unique_fcs);
+        unique_fcs = _.union(_.map(flairs, subFlair => {
+          if (typeof subFlair.flair_text === 'string') {
+            return subFlair.flair_text.match(fc_match);
+          } else {
+            return [];
+          }
+        })[0], unique_fcs);
       }
       let flair_texts = flairs ? _.map(flairs, 'flair_text') : [user.flair.ptrades.flair_text, user.flair.svex.flair_text];
       let igns = _.compact(flair_texts).map(text => text.split(' || ')[1]).join(', ');
@@ -224,14 +231,13 @@ module.exports = {
         promises.push(Ban.markTSVThreads(req.user.redToken, req.params.username));
         promises.push(Ban.updateAutomod(req.user.redToken, req.params.username, 'pokemontrades', unique_fcs));
         promises.push(Ban.updateAutomod(req.user.redToken, req.params.username, 'SVExchange', unique_fcs));
-        promises.push(Ban.updateBanlist(req.user.redToken, req.params.username, req.params.banlistEntry, unique_fcs, igns, req.params.knownAlt));
+        promises.push(Ban.updateBanlist(req.user.redToken, req.params.username, req.params.banlistEntry, unique_fcs, igns, req.params.knownAlt, req.params.tradeNote));
         promises.push(Ban.localBanUser(req.params.username));
       }
       Promise.all(promises).then(function () {
-        console.log('Process to ban /u/' + req.params.username + ' was completed successfully.');
+        sails.log('Process to ban /u/' + req.params.username + ' was completed successfully.');
         res.ok();
       }, function(error) {
-        console.log(error);
         res.status(error.statusCode || 500).json(error);
       });
       Event.create({
@@ -245,9 +251,12 @@ module.exports = {
   },
 
   setLocalBan: function (req, res) {
-    User.update(req.allParams().username, {banned: req.allParams().ban}).exec(function (err, users) {
+    if (!_.isString(req.allParams().username)) {
+      return res.badRequest('Missing username');
+    }
+    User.update({name: req.allParams().username}, {banned: req.allParams().ban}).exec(function (err, users) {
       if (err) {
-        console.log(err);
+        sails.log.error(err);
         return res.serverError(err);
       }
       if (!users.length) {
@@ -266,11 +275,10 @@ module.exports = {
   },
 
   clearSession: function (req, res) {
-    Reddit.checkModeratorStatus(sails.config.reddit.adminRefreshToken, req.user.name, 'pokemontrades').then(function (modStatus) {
-      if (modStatus) { //User is a mod, clear session
+    Reddit.getModeratorPermissions(sails.config.reddit.adminRefreshToken, req.user.name, 'pokemontrades').then(function (permissions) {
+      if (_.includes(permissions, 'all') || _.includes(permissions, 'access')) { //User is a mod, clear session
         Sessions.destroy({session: {'contains': '"user":"' + req.allParams().name + '"'}}).exec(function (err) {
           if (err) {
-            console.log(err);
             return res.serverError(err);
           }
           if (req.allParams().name === req.user.name) {
@@ -281,7 +289,7 @@ module.exports = {
         });
       }
     }, function () {
-      console.log('Failed to check whether /u/' + req.allParams().name + ' is a moderator.');
+      sails.log.error('Failed to check whether /u/' + req.allParams().name + ' is a moderator.');
       return res.serverError();
     });
   }

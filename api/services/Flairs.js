@@ -3,6 +3,18 @@ var _ = require('lodash');
 var referenceService = require('./References.js');
 var NodeCache = require('node-cache');
 var app_claim_cache = new NodeCache({stdTTL: 300});
+var kantoFlair = ['bulbasaur', 'charmander', 'squirtle'];
+var alolaFlair = ['rowlet', 'litten', 'popplio'];
+var eventFlair = kantoFlair.concat(alolaFlair);
+var eventFlairRegExp = new RegExp('\\bkva-(' + eventFlair.join("|") + ')-[1-3]\\b');
+
+exports.eventFlair = eventFlair;
+exports.kantoFlair = kantoFlair;
+exports.eventFlairRegExp = eventFlairRegExp;
+exports.hasEventFlair = function(user) {
+  var flairClasses = user.flair.ptrades.flair_css_class || 'default';
+  return !!flairClasses.match(eventFlairRegExp);
+};
 
 exports.formattedName = function(name) {
   if (!name) {
@@ -14,6 +26,9 @@ exports.formattedName = function(name) {
   if (name.indexOf("ball") > -1) {
     suffix = "Ball";
     numberToSliceTill = -4;
+  } else if (name === "gen2") {
+    suffix = "II Ball";
+    numberToSliceTill = -1;
   } else if (name.indexOf("charm") > -1) {
     suffix = "Charm";
     numberToSliceTill = -5;
@@ -35,6 +50,9 @@ exports.formattedName = function(name) {
   return formatted;
 };
 exports.validFC = function (fc) {
+  if (fc.match(/^SW-\d{4}-\d{4}-\d{4}$/)) {
+    return true;
+  }
   fc = fc.replace(/-/g, '');
   if (!fc.match(/^\d{12}$/) || fc >= Math.pow(2, 39)) {
     return false;
@@ -132,7 +150,7 @@ exports.canUserApply = function (refs, applicationFlair, currentFlairs) {
     }).length;
   }
   for (var i = 0; i < currentFlairs.length; i++) {
-    var flair = currentFlairs[i]; 
+    var flair = currentFlairs[i];
     if (flair.trades >= trades && flair.involvement >= involvement && flair.eggs >= eggs && flair.giveaways >= giveaways) {
       return false;
     }
@@ -173,13 +191,13 @@ exports.formattedRequirements = function (flair, flairs) {
   return formatted;
 };
 
-exports.gameOptions = ['X', 'Y', 'ΩR', 'αS'].join('|');
+exports.gameOptions = ['X', 'Y', 'ΩR', 'αS', 'S', 'M', 'US', 'UM', 'LGP', 'LGE', 'SW', 'SH'].join('|');
 exports.legalIgn = '[^()|,]{0,11}[^()|,\\s]';
 
 // Parse the games. e.g. 'ExampleName (X, Y)' --> [{ign: 'ExampleName', game: 'X'}, {ign: 'ExampleName', game: 'Y'}]
 exports.parseGames = function (formatted_games) {
   var games = [];
-  var ignBlocks = formatted_games.split(/(?!\([^)]*), (?![^(]*\))/);
+  var ignBlocks = _.compact(formatted_games.split(/(?!\([^)]*), (?![^(]*\))/));
   ignBlocks.forEach(function (block) {
     var parts = RegExp('^(' + exports.legalIgn + ')? ?(?:\\(((?:' + exports.gameOptions + ')(?:, (?:' + exports.gameOptions + '))*)\\))?$').exec(block);
     if (!parts) {
@@ -218,7 +236,7 @@ exports.flairCheck = function (ptrades, svex) {
     throw "Flairs too long";
   }
 
-  const friendCodeGroup = /((?:\d{4}-){2}\d{4}(?:, (?:\d{4}-){2}\d{4})*)/;
+  const friendCodeGroup = /((?:SW-)?(?:\d{4}-){2}\d{4}(?:, (?:SW-)?(?:\d{4}-){2}\d{4})*)/;
   const gameGroup = '^(' + exports.legalIgn + '(?: \\((?:' + exports.gameOptions + ')(?:, (?:' + exports.gameOptions + '))*\\))(?:,(?: ' +
     exports.legalIgn + ')?(?: \\((?:' + exports.gameOptions + ')(?:, (?:' + exports.gameOptions + '))*\\))?)*)$';
   var tradesParts = ptrades.split(' || ');
@@ -231,6 +249,9 @@ exports.flairCheck = function (ptrades, svex) {
   }
   if (!tradesParts[1].match(RegExp(gameGroup)) || !svexParts[1].match(RegExp(gameGroup))) {
     throw "We need at least 1 game.";
+  }
+  if (!/\d{4}(, \d{4})*|XXXX/.test(svexParts[2])) {
+    throw "Error with TSVs";
   }
   var response = {
     ptrades: ptrades,
@@ -254,6 +275,11 @@ exports.makeNewCSSClass = function (previous_flair, new_addition, subreddit) {
   }
   if (new_addition === 'involvement') {
     return previous_flair.replace(/( |$)/, '1$1');
+  }
+  if (new_addition.match(/^kva/)) {
+    if (!previous_flair.match(eventFlairRegExp)) {
+      return previous_flair + " " + new_addition;
+    }
   }
   if (subreddit === 'pokemontrades' || !/ribbon/.test(previous_flair + new_addition)) {
     return previous_flair.replace(/[^ 1]*/, new_addition);

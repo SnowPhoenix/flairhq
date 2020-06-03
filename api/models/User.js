@@ -10,7 +10,7 @@ module.exports = {
   types: {
     friendCodeFormat: function (codes) {
       for (var code in codes) {
-        var patt = /([0-9]{4})(-?)(?:([0-9]{4})\2)([0-9]{4})/;
+        var patt = /(?:SW-)?([0-9]{4})(-?)(?:([0-9]{4})\2)([0-9]{4})/;
         if (!patt.test(codes[code])) {
           return false;
         }
@@ -32,7 +32,10 @@ module.exports = {
     email: "string",
     firstname: "string",
     lastname: "string",
-    intro: "text",
+    intro: {
+      type: "text",
+      maxLength: 10000
+    },
     friendCodes: {
       type: "array",
       friendCodeFormat: true
@@ -42,6 +45,10 @@ module.exports = {
       friendCodeFormat: true
     },
     isMod: "boolean",
+    modPermissions: {
+      type: "array",
+      defaultsTo: null
+    },
     banned: "boolean",
     redToken: "string",
     flair: "json"

@@ -1,11 +1,15 @@
 var shared = require('./sharedClientFunctions.js');
 module.exports = function ($scope, io) {
   shared.addRepeats($scope, io);
+  
+  const messageAddition = '\n\n***\n**Please review [this page](https://www.reddit.com/r/pokemontrades/wiki/appeals) for important information before replying or taking any other action.**';
+  
   $scope.banInfo = {
     username: $scope.query.username || '',
     banNote: $scope.query.banNote || '',
-    banMessage: $scope.query.banMessage || '',
+    banMessage: ($scope.query.banMessage || '') + messageAddition,
     banlistEntry: $scope.query.banlistEntry || '',
+    tradeNote: $scope.query.tradeNote || '',
     duration: $scope.query.duration || '',
     knownAlt: $scope.query.knownAlt || '',
     additionalFCs: $scope.query.additionalFCs || ''
@@ -48,6 +52,12 @@ module.exports = function ($scope, io) {
       $scope.indexSpin.ban = false;
       return;
     }
+    
+    if ($scope.banInfo.banMessage.length > 1000) {
+      $scope.banError = "The ban note cannot be longer than 1000 characters.";
+      $scope.indexSpin.ban = false;
+      return;
+    }
 
     if ($scope.banInfo.duration) {
       if (isNaN($scope.banInfo.duration) || parseInt($scope.banInfo.duration) < 0) {
@@ -76,6 +86,7 @@ module.exports = function ($scope, io) {
       "banNote": $scope.banInfo.banNote,
       "banMessage": $scope.banInfo.banMessage,
       "banlistEntry": $scope.banInfo.banlistEntry,
+      "tradeNote": $scope.banInfo.tradeNote,
       "duration": parseInt($scope.banInfo.duration),
       "knownAlt": $scope.banInfo.knownAlt,
       "additionalFCs": FCs
@@ -89,6 +100,7 @@ module.exports = function ($scope, io) {
         $scope.banInfo.banNote = "";
         $scope.banInfo.banMessage = "";
         $scope.banInfo.banlistEntry = "";
+        $scope.banInfo.tradeNote = "";
         $scope.banInfo.duration = "";
         $scope.banInfo.knownAlt = "";
         $scope.banInfo.additionalFCs = "";

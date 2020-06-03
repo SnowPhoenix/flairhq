@@ -28,6 +28,10 @@ var fapp = ng.module("fapp", [
   'fapp.md'
 ]);
 
+fapp.config(['$locationProvider', function($locationProvider) {
+  $locationProvider.hashPrefix('');
+}]);
+
 fapp.service('io', function () {
   var socket = require('socket.io-client');
   var io = require('sails.io.js')(socket);
@@ -53,4 +57,4 @@ $(function () {
   });
 });
 
-ng.bootstrap(document, ['fapp']);
+ng.bootstrap(document, ['fapp'], {strictDi: true});

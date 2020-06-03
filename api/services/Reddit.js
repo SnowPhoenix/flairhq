@@ -53,8 +53,8 @@ var makeRequest = async function (refreshToken, requestType, url, data, rateLimi
   };
   let response = await request(options).catch(function (error) {
     if (!silenceErrors) {
-      console.log('Reddit error: ' + requestType + ' request sent to ' + url + ' returned ' + error.statusCode);
-      console.log('Form data sent: ' + JSON.stringify(data));
+      sails.log.error('Reddit error: ' + requestType + ' request sent to ' + url + ' returned ' + error.statusCode);
+      sails.log.error('Form data sent: ' + JSON.stringify(data));
     }
     throw {statusCode: error.statusCode, error: '(Reddit response)'};
   });
@@ -63,7 +63,7 @@ var makeRequest = async function (refreshToken, requestType, url, data, rateLimi
   try {
     bodyJson = JSON.parse(response.body);
   } catch (error) {
-    console.log("Error with parsing: " + response.body);
+    sails.log.error("Error with parsing: " + response.body);
     throw {error: "Error with parsing: " + response.body};
   }
   return bodyJson;
@@ -115,7 +115,7 @@ exports.checkUsernameAvailable = async function (name) {
 exports.banUser = function (refreshToken, username, ban_message, note, subreddit, duration) {
   var actual_sub = sails.config.debug.reddit ? sails.config.debug.subreddit : subreddit;
   var url = 'https://oauth.reddit.com/r/' + actual_sub + '/api/friend';
-  var data = {api_type: 'json', ban_message: ban_message, duration: (duration ? duration : 'undefined'), name: username, note: note, type: 'banned'};
+  var data = {api_type: 'json', ban_message: ban_message, duration: (duration ? duration : ''), name: username, note: note, type: 'banned'};
   return makeRequest(refreshToken, 'POST', url, data, 5);
 };
 
@@ -135,13 +135,13 @@ exports.editWikiPage = function (refreshToken, subreddit, page, content, reason)
 
 exports.searchTSVThreads = function (refreshToken, username) {
   var actual_sub = sails.config.debug.reddit ? sails.config.debug.subreddit : 'SVExchange';
-  var query = "(and (or (field flair 'banned') (field flair 'sv')) (field author '" + username + "'))";
-  return exports.search(refreshToken, actual_sub, query, true, 'new', 'all', 'cloudsearch');
+  var query = "flair:tsv AND author:" + username;
+  return exports.search(refreshToken, actual_sub, query, true, 'new', 'all', 'lucene');
 };
 
 exports.search = function (refreshToken, subreddit, query, restrict_sr, sort, time, syntax) {
   var querystring = '?q=' + encodeURIComponent(query) + (restrict_sr  ? '&restrict_sr=on' : '') +
-    (sort ? '&sort=' + sort : '') + (time ? '&t=' + time : '') + '&syntax=' + (syntax ? syntax : 'cloudsearch');
+    (sort ? '&sort=' + sort : '') + (time ? '&t=' + time : '') + '&syntax=' + (syntax ? syntax : 'lucene');
   var endpoint = 'https://oauth.reddit.com/r/' + subreddit + '/search';
   return getEntireListing(refreshToken, endpoint, querystring, 10);
 };
@@ -183,10 +183,10 @@ exports.sendReply = function (refreshToken, text, parent_id) {
   return makeRequest(refreshToken, 'POST', url, data, 30);
 };
 
-exports.checkModeratorStatus = async function (refreshToken, username, subreddit) {
+exports.getModeratorPermissions = async function (refreshToken, username, subreddit) {
   var url = 'https://oauth.reddit.com/r/' + subreddit + '/about/moderators?user=' + username;
   let res = await makeRequest(refreshToken, 'GET', url, undefined, 5);
-  return res.data.children.length !== 0;
+  return res.data.children.length ? res.data.children.find(child => child.name === username).mod_permissions : null;
 };
 
 exports.getModmail = async function (refreshToken, subreddit, after, before) {
